@@ -20,6 +20,7 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string(),
   APP_URL: z.string(),
   EMAIL_FROM: z.string(),
+  GOOGLE_CLIENT_ID: z.string(),
 });
 
 export const env = envSchema.parse(process.env);

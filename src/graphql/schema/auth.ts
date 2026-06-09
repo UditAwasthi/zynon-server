@@ -252,3 +252,26 @@ builder.mutationField(
         ),
     })
 );
+
+builder.mutationField(
+  "googleLogin",
+  (t) =>
+    t.field({
+      type: AuthPayloadType,
+
+      args: {
+        idToken:
+          t.arg.string({
+            required: true,
+          }),
+      },
+
+      resolve: (
+        _,
+        args
+      ) =>
+        authService.googleLogin(
+          args.idToken
+        ),
+    })
+);

@@ -9,6 +9,7 @@ import { env } from "../../config/env";
 import { generateOtp } from "../../utils/token";
 import { emailService } from "../email/email.service";
 import crypto from "crypto";
+import { googleClient } from "../../lib/google";
 
 export class AuthService {
   async register(
@@ -466,6 +467,117 @@ export class AuthService {
 
     return true;
   }
+  async googleLogin(
+  idToken: string
+) {
+  const ticket =
+    await googleClient.verifyIdToken({
+      idToken,
+      audience:
+        env.GOOGLE_CLIENT_ID,
+    });
+
+  const payload =
+    ticket.getPayload();
+
+  if (
+    !payload ||
+    !payload.email
+  ) {
+    throw new Error(
+      "Invalid Google token"
+    );
+  }
+
+  const email =
+    payload.email;
+
+  const emailLower =
+    email.toLowerCase();
+
+  let user =
+    await prisma.user.findUnique({
+      where: {
+        emailLower,
+      },
+    });
+
+  if (!user) {
+    user =
+      await prisma.user.create({
+        data: {
+          email,
+          emailLower,
+
+          username:
+            email.split("@")[0],
+
+          usernameLower:
+            email
+              .split("@")[0]
+              .toLowerCase(),
+
+          authProvider:
+            "GOOGLE",
+
+          avatarUrl:
+            payload.picture,
+
+          emailVerifiedAt:
+            new Date(),
+        },
+      });
+  }
+
+  const session =
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+
+        refreshTokenHash:
+          "",
+
+        expiresAt:
+          new Date(
+            Date.now() +
+            1000 *
+            60 *
+            60 *
+            24 *
+            30
+          ),
+      },
+    });
+
+  const accessToken =
+    signAccessToken(
+      user.id
+    );
+
+  const refreshToken =
+    signRefreshToken(
+      session.id
+    );
+
+  await prisma.session.update({
+    where: {
+      id: session.id,
+    },
+
+    data: {
+      refreshTokenHash:
+        await hashPassword(
+          refreshToken
+        ),
+    },
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    user,
+  };
+}
 }
 
 export const authService =
