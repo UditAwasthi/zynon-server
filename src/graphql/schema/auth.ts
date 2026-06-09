@@ -260,7 +260,7 @@ builder.mutationField(
       type: AuthPayloadType,
 
       args: {
-        idToken:
+        token:
           t.arg.string({
             required: true,
           }),
@@ -271,7 +271,7 @@ builder.mutationField(
         args
       ) =>
         authService.googleLogin(
-          args.idToken
+          args.token
         ),
     })
 );

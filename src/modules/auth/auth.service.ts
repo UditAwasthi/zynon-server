@@ -9,6 +9,7 @@ import { env } from "../../config/env";
 import { generateOtp } from "../../utils/token";
 import { emailService } from "../email/email.service";
 import crypto from "crypto";
+import axios from "axios";
 import { googleClient } from "../../lib/google";
 
 export class AuthService {
@@ -468,116 +469,154 @@ export class AuthService {
     return true;
   }
   async googleLogin(
-  idToken: string
-) {
-  const ticket =
-    await googleClient.verifyIdToken({
-      idToken,
-      audience:
-        env.GOOGLE_CLIENT_ID,
-    });
-
-  const payload =
-    ticket.getPayload();
-
-  if (
-    !payload ||
-    !payload.email
+    token: string
   ) {
-    throw new Error(
-      "Invalid Google token"
-    );
+    try {
+      // Try ID Token first
+      const ticket =
+        await googleClient.verifyIdToken({
+          idToken: token,
+          audience:
+            env.GOOGLE_CLIENT_ID,
+        });
+
+      const payload =
+        ticket.getPayload();
+
+      if (
+        !payload ||
+        !payload.email
+      ) {
+        throw new Error(
+          "Invalid Google ID Token"
+        );
+      }
+
+      return this.handleGoogleUser({
+        email: payload.email,
+        picture:
+          payload.picture,
+      });
+    } catch {
+   
+      const { data } =
+        await axios.get(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+      if (!data.email) {
+        throw new Error(
+          "Google email not found"
+        );
+      }
+
+      return this.handleGoogleUser({
+        email: data.email,
+        picture:
+          data.picture,
+      });
+    }
   }
 
-  const email =
-    payload.email;
+  private async handleGoogleUser({
+    email,
+    picture,
+  }: {
+    email: string;
+    picture?: string;
+  }) {
+    const emailLower =
+      email.toLowerCase();
 
-  const emailLower =
-    email.toLowerCase();
-
-  let user =
-    await prisma.user.findUnique({
-      where: {
-        emailLower,
-      },
-    });
-
-  if (!user) {
-    user =
-      await prisma.user.create({
-        data: {
-          email,
+    let user =
+      await prisma.user.findUnique({
+        where: {
           emailLower,
-
-          username:
-            email.split("@")[0],
-
-          usernameLower:
-            email
-              .split("@")[0]
-              .toLowerCase(),
-
-          authProvider:
-            "GOOGLE",
-
-          avatarUrl:
-            payload.picture,
-
-          emailVerifiedAt:
-            new Date(),
         },
       });
-  }
 
-  const session =
-    await prisma.session.create({
+    if (!user) {
+      const baseUsername =
+        email.split("@")[0];
+
+      user =
+        await prisma.user.create({
+          data: {
+            email,
+            emailLower,
+
+            username:
+              baseUsername,
+
+            usernameLower:
+              baseUsername.toLowerCase(),
+
+            authProvider:
+              "GOOGLE",
+
+            avatarUrl:
+              picture,
+
+            emailVerifiedAt:
+              new Date(),
+          },
+        });
+    }
+
+    const session =
+      await prisma.session.create({
+        data: {
+          userId: user.id,
+
+          refreshTokenHash:
+            "",
+
+          expiresAt:
+            new Date(
+              Date.now() +
+              1000 *
+              60 *
+              60 *
+              24 *
+              30
+            ),
+        },
+      });
+
+    const accessToken =
+      signAccessToken(
+        user.id
+      );
+
+    const refreshToken =
+      signRefreshToken(
+        session.id
+      );
+
+    await prisma.session.update({
+      where: {
+        id: session.id,
+      },
+
       data: {
-        userId: user.id,
-
         refreshTokenHash:
-          "",
-
-        expiresAt:
-          new Date(
-            Date.now() +
-            1000 *
-            60 *
-            60 *
-            24 *
-            30
+          await hashPassword(
+            refreshToken
           ),
       },
     });
 
-  const accessToken =
-    signAccessToken(
-      user.id
-    );
-
-  const refreshToken =
-    signRefreshToken(
-      session.id
-    );
-
-  await prisma.session.update({
-    where: {
-      id: session.id,
-    },
-
-    data: {
-      refreshTokenHash:
-        await hashPassword(
-          refreshToken
-        ),
-    },
-  });
-
-  return {
-    accessToken,
-    refreshToken,
-    user,
-  };
-}
+    return {
+      accessToken,
+      refreshToken,
+      user,
+    };
+  }
 }
 
 export const authService =
