@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env";
 import { generateOtp } from "../../utils/token";
 import { emailService } from "../email/email.service";
-import crypto from "crypto";
+
 import axios from "axios";
 import { googleClient } from "../../lib/google";
 
@@ -54,43 +54,17 @@ export class AuthService {
         },
       });
 
-    const session =
-      await prisma.session.create({
-        data: {
-          userId: user.id,
-          refreshTokenHash: "",
-          expiresAt: new Date(
-            Date.now() +
-            1000 *
-            60 *
-            60 *
-            24 *
-            30
-          ),
-        },
-      });
-
-    const accessToken =
-      signAccessToken(user.id);
-
-    const refreshToken =
-      signRefreshToken(session.id);
-
-    await prisma.session.update({
-      where: {
-        id: session.id,
-      },
-      data: {
-        refreshTokenHash:
-          refreshToken,
-      },
-    });
+    const tokens =
+      await this.createSession(
+        user.id
+      );
 
     return {
-      accessToken,
-      refreshToken,
+      ...tokens,
       user,
     };
+
+
   }
   async login(
     email: string,
@@ -116,37 +90,13 @@ export class AuthService {
     if (!isValid) {
       throw new Error("Invalid credentials");
     }
-
-    const session = await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshTokenHash: "",
-        expiresAt: new Date(
-          Date.now() +
-          1000 * 60 * 60 * 24 * 30
-        ),
-      },
-    });
-
-    const accessToken =
-      signAccessToken(user.id);
-
-    const refreshToken =
-      signRefreshToken(session.id);
-
-    await prisma.session.update({
-      where: {
-        id: session.id,
-      },
-      data: {
-        refreshTokenHash:
-          refreshToken,
-      },
-    });
+    const tokens =
+      await this.createSession(
+        user.id
+      );
 
     return {
-      accessToken,
-      refreshToken,
+      ...tokens,
       user,
     };
   }
@@ -171,25 +121,38 @@ export class AuthService {
       });
 
     if (!session) {
-      throw new Error("Invalid session");
+      throw new Error(
+        "Invalid session"
+      );
     }
 
     if (session.revokedAt) {
-      throw new Error("Session revoked");
+      throw new Error(
+        "Session revoked"
+      );
     }
 
-    if (
-      session.refreshTokenHash !==
-      refreshToken
-    ) {
-      throw new Error("Invalid token");
+    const isValid =
+      await verifyPassword(
+        refreshToken,
+        session.refreshTokenHash
+      );
+
+    if (!isValid) {
+      throw new Error(
+        "Invalid token"
+      );
     }
 
     const newAccessToken =
-      signAccessToken(session.userId);
+      signAccessToken(
+        session.userId
+      );
 
     const newRefreshToken =
-      signRefreshToken(session.id);
+      signRefreshToken(
+        session.id
+      );
 
     await prisma.session.update({
       where: {
@@ -197,14 +160,19 @@ export class AuthService {
       },
       data: {
         refreshTokenHash:
-          newRefreshToken,
-        lastUsedAt: new Date(),
+          await hashPassword(
+            newRefreshToken
+          ),
+        lastUsedAt:
+          new Date(),
       },
     });
 
     return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
+      accessToken:
+        newAccessToken,
+      refreshToken:
+        newRefreshToken,
       user: session.user,
     };
   }
@@ -251,49 +219,61 @@ export class AuthService {
     let user = null;
 
     if (userId) {
-      user = await prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-      });
+      user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+        });
     } else if (email) {
-      user = await prisma.user.findUnique({
-        where: {
-          emailLower: email.toLowerCase(),
-        },
-      });
+      user =
+        await prisma.user.findUnique({
+          where: {
+            emailLower:
+              email.toLowerCase(),
+          },
+        });
     }
 
     if (!user) {
       return true;
     }
 
-    const token = Math.floor(
-      100000 +
-      Math.random() * 900000
-    ).toString();
+    await prisma.verificationToken.deleteMany(
+      {
+        where: {
+          userId: user.id,
+        },
+      }
+    );
 
-    await prisma.verificationToken.deleteMany({
-      where: {
-        userId: user.id,
-      },
-    });
+    const otp =
+      generateOtp();
 
+    await prisma.verificationToken.create(
+      {
+        data: {
+          userId: user.id,
 
-    await prisma.verificationToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(
-          Date.now() +
-          1000 * 60 * 60 * 24
-        ),
-      },
-    });
+          token:
+            await hashPassword(
+              otp
+            ),
+
+          expiresAt:
+            new Date(
+              Date.now() +
+              1000 *
+              60 *
+              10
+            ),
+        },
+      }
+    );
 
     await emailService.sendVerificationEmail(
       user.email,
-      token
+      otp
     );
 
     return true;
@@ -307,7 +287,6 @@ export class AuthService {
         {
           where: {
             userId,
-            token: otp,
           },
         }
       );
@@ -327,6 +306,18 @@ export class AuthService {
       );
     }
 
+    const isValid =
+      await verifyPassword(
+        otp,
+        verificationToken.token
+      );
+
+    if (!isValid) {
+      throw new Error(
+        "Invalid OTP"
+      );
+    }
+
     await prisma.user.update({
       where: {
         id: userId,
@@ -337,11 +328,13 @@ export class AuthService {
       },
     });
 
-    await prisma.verificationToken.delete({
-      where: {
-        id: verificationToken.id,
-      },
-    });
+    await prisma.verificationToken.deleteMany(
+      {
+        where: {
+          userId,
+        },
+      }
+    );
 
     return true;
   }
@@ -360,10 +353,8 @@ export class AuthService {
       return true;
     }
 
-    const otp = Math.floor(
-      100000 +
-      Math.random() * 900000
-    ).toString();
+    const otp =
+      generateOtp();
 
     await prisma.passwordResetToken.deleteMany(
       {
@@ -373,16 +364,26 @@ export class AuthService {
       }
     );
 
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token: otp,
-        expiresAt: new Date(
-          Date.now() +
-          1000 * 60 * 10
-        ),
-      },
-    });
+    await prisma.passwordResetToken.create(
+      {
+        data: {
+          userId: user.id,
+
+          token:
+            await hashPassword(
+              otp
+            ),
+
+          expiresAt:
+            new Date(
+              Date.now() +
+              1000 *
+              60 *
+              10
+            ),
+        },
+      }
+    );
 
     await emailService.sendPasswordResetEmail(
       user.email,
@@ -406,7 +407,7 @@ export class AuthService {
 
     if (!user) {
       throw new Error(
-        "User not found"
+        "Invalid OTP"
       );
     }
 
@@ -415,7 +416,6 @@ export class AuthService {
         {
           where: {
             userId: user.id,
-            token: otp,
           },
         }
       );
@@ -435,6 +435,18 @@ export class AuthService {
       );
     }
 
+    const isValid =
+      await verifyPassword(
+        otp,
+        resetToken.token
+      );
+
+    if (!isValid) {
+      throw new Error(
+        "Invalid OTP"
+      );
+    }
+
     const passwordHash =
       await hashPassword(
         password
@@ -449,11 +461,13 @@ export class AuthService {
       },
     });
 
-    await prisma.passwordResetToken.delete({
-      where: {
-        id: resetToken.id,
-      },
-    });
+    await prisma.passwordResetToken.deleteMany(
+      {
+        where: {
+          userId: user.id,
+        },
+      }
+    );
 
     await prisma.session.updateMany({
       where: {
@@ -472,7 +486,6 @@ export class AuthService {
     token: string
   ) {
     try {
-      // Try ID Token first
       const ticket =
         await googleClient.verifyIdToken({
           idToken: token,
@@ -484,8 +497,7 @@ export class AuthService {
         ticket.getPayload();
 
       if (
-        !payload ||
-        !payload.email
+        !payload?.email
       ) {
         throw new Error(
           "Invalid Google ID Token"
@@ -493,33 +505,41 @@ export class AuthService {
       }
 
       return this.handleGoogleUser({
-        email: payload.email,
+        email:
+          payload.email,
         picture:
           payload.picture,
       });
-    } catch {
-   
-      const { data } =
-        await axios.get(
-          "https://www.googleapis.com/oauth2/v3/userinfo",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+    } catch (error) {
+      try {
+        const { data } =
+          await axios.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
-      if (!data.email) {
+        if (!data.email) {
+          throw new Error(
+            "Google email not found"
+          );
+        }
+
+        return this.handleGoogleUser({
+          email:
+            data.email,
+          picture:
+            data.picture,
+        });
+      } catch {
         throw new Error(
-          "Google email not found"
+          "Invalid Google token"
         );
       }
-
-      return this.handleGoogleUser({
-        email: data.email,
-        picture:
-          data.picture,
-      });
     }
   }
 
@@ -544,17 +564,38 @@ export class AuthService {
       const baseUsername =
         email.split("@")[0];
 
+      let username =
+        baseUsername;
+
+      let usernameLower =
+        username.toLowerCase();
+
+      let counter = 1;
+
+      while (
+        await prisma.user.findUnique({
+          where: {
+            usernameLower,
+          },
+        })
+      ) {
+        username =
+          `${baseUsername}${counter}`;
+
+        usernameLower =
+          username.toLowerCase();
+
+        counter++;
+      }
+
       user =
         await prisma.user.create({
           data: {
             email,
             emailLower,
 
-            username:
-              baseUsername,
-
-            usernameLower:
-              baseUsername.toLowerCase(),
+            username,
+            usernameLower,
 
             authProvider:
               "GOOGLE",
@@ -566,43 +607,58 @@ export class AuthService {
               new Date(),
           },
         });
+    } else {
+      user =
+        await prisma.user.update({
+          where: {
+            id: user.id,
+          },
+
+          data: {
+            avatarUrl:
+              user.avatarUrl ??
+              picture,
+
+            emailVerifiedAt:
+              user.emailVerifiedAt ??
+              new Date(),
+          },
+        });
     }
 
+    const tokens =
+      await this.createSession(
+        user.id
+      );
+
+    return {
+      ...tokens,
+      user,
+    };
+  }
+  private async createSession(
+    userId: string
+  ) {
     const session =
       await prisma.session.create({
         data: {
-          userId: user.id,
-
-          refreshTokenHash:
-            "",
-
-          expiresAt:
-            new Date(
-              Date.now() +
-              1000 *
-              60 *
-              60 *
-              24 *
-              30
-            ),
+          userId,
+          refreshTokenHash: "",
+          expiresAt: new Date(
+            Date.now() +
+            1000 * 60 * 60 * 24 * 30
+          ),
         },
       });
 
     const accessToken =
-      signAccessToken(
-        user.id
-      );
+      signAccessToken(userId);
 
     const refreshToken =
-      signRefreshToken(
-        session.id
-      );
+      signRefreshToken(session.id);
 
     await prisma.session.update({
-      where: {
-        id: session.id,
-      },
-
+      where: { id: session.id },
       data: {
         refreshTokenHash:
           await hashPassword(
@@ -614,7 +670,6 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user,
     };
   }
 }
