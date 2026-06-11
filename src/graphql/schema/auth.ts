@@ -11,6 +11,7 @@ export const AuthPayloadType =
       username: string;
       email: string;
       role: string;
+      emailVerifiedAt: Date | null;
     };
   }>("AuthPayload");
 

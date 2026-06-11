@@ -5,6 +5,7 @@ export const UserType = builder.objectRef<{
   username: string;
   email: string;
   role: string;
+  emailVerifiedAt: Date | null;
 }>("User");
 
 UserType.implement({
@@ -16,6 +17,11 @@ UserType.implement({
     email: t.exposeString("email"),
 
     role: t.exposeString("role"),
+
+    emailVerifiedAt: t.expose("emailVerifiedAt", {
+      type: "DateTime",
+      nullable: true,
+    }),
   }),
 });
 
