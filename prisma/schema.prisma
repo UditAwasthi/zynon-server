@@ -9,32 +9,49 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  username            String               @unique @db.VarChar(30)
-  usernameLower       String               @unique @db.VarChar(30)
-  email               String               @unique @db.VarChar(254)
-  emailLower          String               @unique @db.VarChar(254)
+  id                  String        @id @default(uuid()) @db.Uuid
+  username            String        @unique @db.VarChar(30)
+  usernameLower       String        @unique @db.VarChar(30)
+  email               String        @unique @db.VarChar(254)
+  emailLower          String        @unique @db.VarChar(254)
   passwordHash        String?
-  authProvider        AuthProvider         @default(EMAIL)
-  accountStatus       AccountStatus        @default(ACTIVE)
-  role                UserRole             @default(USER)
+  authProvider        AuthProvider  @default(EMAIL)
+  accountStatus       AccountStatus @default(ACTIVE)
+  role                UserRole      @default(USER)
+  twoFactorEnabled    Boolean       @default(false)
   avatarUrl           String?
-  bio                 String?              @db.VarChar(280)
-  onboardingCompleted Boolean              @default(false)
+  bio                 String?       @db.VarChar(280)
+  onboardingCompleted Boolean       @default(false)
   emailVerifiedAt     DateTime?
   fcmToken            String?
   lastLoginAt         DateTime?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   deletedAt           DateTime?
+
   passwordResetTokens PasswordResetToken[]
   sessions            Session[]
   verificationTokens  VerificationToken[]
 
-  @@index([username])
-  @@index([usernameLower])
-  @@index([email])
-  @@index([emailLower])
+  profile Profile?
+
+  notificationSettings NotificationSettings?
+
+  blockedUsers Block[] @relation("UserBlocks")
+  blockedBy    Block[] @relation("BlockedBy")
+
+  restrictedUsers Restriction[] @relation("UserRestrictions")
+  restrictedBy    Restriction[] @relation("RestrictedUsers")
+
+  mutedUsers Mute[] @relation("UserMutes")
+  mutedBy    Mute[] @relation("MutedUsers")
+
+  closeFriends  CloseFriend[] @relation("UserCloseFriends")
+  closeFriendOf CloseFriend[] @relation("CloseFriendUsers")
+
+  following Follow[] @relation("Following")
+  followers Follow[] @relation("Followers")
+
   @@index([accountStatus])
   @@index([authProvider])
   @@index([role])
@@ -64,12 +81,9 @@ model Session {
 }
 
 model VerificationToken {
-  id String @id @default(uuid()) @db.Uuid
-
-  userId String @db.Uuid
-
-  token String @db.VarChar(6)
-
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @db.VarChar(6)
   expiresAt DateTime
   createdAt DateTime @default(now())
 
@@ -77,7 +91,6 @@ model VerificationToken {
 
   @@index([userId])
   @@index([expiresAt])
-
   @@map("verification_tokens")
 }
 
@@ -116,4 +129,235 @@ enum UserRole {
   ADMIN
 
   @@map("user_role")
+}
+
+model Profile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  fullName    String?     @db.VarChar(100)
+  dateOfBirth DateTime?
+  pronouns    Pronouns?
+  location    String?     @db.VarChar(100)
+  accountType AccountType @default(PERSONAL)
+  niche       Niche?
+
+  profileMusicUrl String?
+
+  showInGlobalSearch Boolean @default(true)
+
+  postCount      Int @default(0)
+  followerCount  Int @default(0)
+  followingCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  professionalIdentity ProfessionalIdentity?
+  profileLinks         ProfileLink[]
+  profileInterests     ProfileInterest[]
+  privacySettings      PrivacySettings?
+
+  @@index([accountType])
+  @@index([niche])
+  @@map("profiles")
+}
+
+model ProfessionalIdentity {
+  id        String @id @default(uuid()) @db.Uuid
+  profileId String @unique @db.Uuid
+
+  currentRole      String? @db.VarChar(100)
+  company          String? @db.VarChar(100)
+  industry         String? @db.VarChar(100)
+  highestEducation String? @db.VarChar(100)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("professional_identities")
+}
+
+model PrivacySettings {
+  id        String @id @default(uuid()) @db.Uuid
+  profileId String @unique @db.Uuid
+
+  accountPrivacy    AccountPrivacy    @default(PUBLIC)
+  messagePermission MessagePermission @default(EVERYONE)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_settings")
+}
+
+model NotificationSettings {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  likes    Boolean @default(true)
+  comments Boolean @default(true)
+  mentions Boolean @default(true)
+
+  newFollowers Boolean @default(true)
+
+  directMessages Boolean @default(true)
+  groupMessages  Boolean @default(true)
+
+  communityPosts         Boolean @default(true)
+  communityAnnouncements Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_settings")
+}
+
+model ProfileLink {
+  id        String @id @default(uuid()) @db.Uuid
+  profileId String @db.Uuid
+
+  label        String @db.VarChar(50)
+  url          String
+  displayOrder Int    @default(0)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("profile_links")
+}
+
+model Interest {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  profiles ProfileInterest[]
+
+  @@map("interests")
+}
+
+model ProfileInterest {
+  profileId  String @db.Uuid
+  interestId String @db.Uuid
+
+  profile  Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, interestId])
+  @@index([interestId])
+  @@map("profile_interests")
+}
+
+enum Pronouns {
+  HE_HIM
+  SHE_HER
+  THEY_THEM
+  OTHER
+}
+
+enum AccountType {
+  PERSONAL
+  CREATOR
+  BUSINESS
+}
+
+enum AccountPrivacy {
+  PUBLIC
+  FOLLOWERS_ONLY
+  PRIVATE
+}
+
+enum MessagePermission {
+  EVERYONE
+  FOLLOWERS
+  NO_ONE
+}
+
+enum Niche {
+  TECHNOLOGY
+  GAMING
+  FITNESS
+  ART
+  MUSIC
+  EDUCATION
+  BUSINESS
+  OTHER
+}
+
+model Block {
+  blockerId String @db.Uuid
+  blockedId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  blocker User @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("blocks")
+}
+
+model Restriction {
+  userId       String @db.Uuid
+  restrictedId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user       User @relation("UserRestrictions", fields: [userId], references: [id], onDelete: Cascade)
+  restricted User @relation("RestrictedUsers", fields: [restrictedId], references: [id], onDelete: Cascade)
+
+  @@id([userId, restrictedId])
+  @@index([userId])
+  @@index([restrictedId])
+  @@map("restrictions")
+}
+
+model Mute {
+  userId      String @db.Uuid
+  mutedUserId String @db.Uuid
+
+  mutePosts   Boolean @default(true)
+  muteStories Boolean @default(false)
+  muteNotes   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user      User @relation("UserMutes", fields: [userId], references: [id], onDelete: Cascade)
+  mutedUser User @relation("MutedUsers", fields: [mutedUserId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mutedUserId])
+  @@index([userId])
+  @@index([mutedUserId])
+  @@map("mutes")
+}
+
+model CloseFriend {
+  userId        String @db.Uuid
+  closeFriendId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user        User @relation("UserCloseFriends", fields: [userId], references: [id], onDelete: Cascade)
+  closeFriend User @relation("CloseFriendUsers", fields: [closeFriendId], references: [id], onDelete: Cascade)
+
+  @@id([userId, closeFriendId])
+  @@index([userId])
+  @@index([closeFriendId])
+  @@map("close_friends")
+}
+
+model Follow {
+  followerId  String @db.Uuid
+  followingId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
 }
