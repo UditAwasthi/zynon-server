@@ -51,6 +51,15 @@ builder.mutationField(
         password: t.arg.string({
           required: true,
         }),
+
+        fullName: t.arg.string({
+          required: true,
+        }),
+
+        dateOfBirth: t.arg({
+          type: "DateTime",
+          required: true,
+        }),
       },
 
       resolve: async (
@@ -60,7 +69,9 @@ builder.mutationField(
         return authService.register(
           args.email,
           args.username,
-          args.password
+          args.password,
+          args.fullName,
+          args.dateOfBirth
         );
       },
     })
