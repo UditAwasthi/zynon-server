@@ -16,9 +16,13 @@ export class AuthService {
   async register(
     email: string,
     username: string,
-    password: string
+    password: string,
+    fullName: string,
+    dateOfBirth: Date
   ) {
-    const emailLower = email.toLowerCase();
+    const emailLower =
+      email.toLowerCase();
+
     const usernameLower =
       username.toLowerCase();
 
@@ -42,17 +46,42 @@ export class AuthService {
       await hashPassword(password);
 
     const user =
-      await prisma.user.create({
-        data: {
-          email,
-          emailLower,
+      await prisma.$transaction(
+        async (tx) => {
+          const user =
+            await tx.user.create({
+              data: {
+                email,
+                emailLower,
 
-          username,
-          usernameLower,
+                username,
+                usernameLower,
 
-          passwordHash,
-        },
-      });
+                passwordHash,
+              },
+            });
+
+          await tx.profile.create({
+            data: {
+              userId: user.id,
+
+              fullName,
+
+              dateOfBirth,
+            },
+          });
+
+          await tx.notificationSettings.create(
+            {
+              data: {
+                userId: user.id,
+              },
+            }
+          );
+
+          return user;
+        }
+      );
 
     const tokens =
       await this.createSession(
@@ -63,8 +92,6 @@ export class AuthService {
       ...tokens,
       user,
     };
-
-
   }
   async login(
     email: string,
@@ -496,9 +523,7 @@ export class AuthService {
       const payload =
         ticket.getPayload();
 
-      if (
-        !payload?.email
-      ) {
+      if (!payload?.email) {
         throw new Error(
           "Invalid Google ID Token"
         );
@@ -507,10 +532,14 @@ export class AuthService {
       return this.handleGoogleUser({
         email:
           payload.email,
+
         picture:
           payload.picture,
+
+        name:
+          payload.name,
       });
-    } catch (error) {
+    } catch {
       try {
         const { data } =
           await axios.get(
@@ -532,8 +561,12 @@ export class AuthService {
         return this.handleGoogleUser({
           email:
             data.email,
+
           picture:
             data.picture,
+
+          name:
+            data.name,
         });
       } catch {
         throw new Error(
@@ -546,9 +579,11 @@ export class AuthService {
   private async handleGoogleUser({
     email,
     picture,
+    name,
   }: {
     email: string;
     picture?: string;
+    name?: string;
   }) {
     const emailLower =
       email.toLowerCase();
@@ -589,24 +624,51 @@ export class AuthService {
       }
 
       user =
-        await prisma.user.create({
-          data: {
-            email,
-            emailLower,
+        await prisma.$transaction(
+          async (tx) => {
+            const user =
+              await tx.user.create({
+                data: {
+                  email,
+                  emailLower,
 
-            username,
-            usernameLower,
+                  username,
+                  usernameLower,
 
-            authProvider:
-              "GOOGLE",
+                  authProvider:
+                    "GOOGLE",
 
-            avatarUrl:
-              picture,
+                  avatarUrl:
+                    picture,
 
-            emailVerifiedAt:
-              new Date(),
-          },
-        });
+                  emailVerifiedAt:
+                    new Date(),
+                },
+              });
+
+            await tx.profile.create({
+              data: {
+                userId:
+                  user.id,
+
+                fullName:
+                  name ??
+                  username,
+              },
+            });
+
+            await tx.notificationSettings.create(
+              {
+                data: {
+                  userId:
+                    user.id,
+                },
+              }
+            );
+
+            return user;
+          }
+        );
     } else {
       user =
         await prisma.user.update({
