@@ -20,6 +20,7 @@ model User {
   role                UserRole      @default(USER)
   twoFactorEnabled    Boolean       @default(false)
   avatarUrl           String?
+  avatarKey String?
   bio                 String?       @db.VarChar(280)
   onboardingCompleted Boolean       @default(false)
   emailVerifiedAt     DateTime?

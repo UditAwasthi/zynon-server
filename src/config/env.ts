@@ -21,6 +21,9 @@ const envSchema = z.object({
   APP_URL: z.string(),
   EMAIL_FROM: z.string(),
   GOOGLE_CLIENT_ID: z.string(),
+  SUPABASE_URL:z.string(),
+  SUPABASE_SECRET_KEY:z.string(),
+  SUPABASE_BUCKET:z.string(),
 });
 
 export const env = envSchema.parse(process.env);
