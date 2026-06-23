@@ -6,6 +6,9 @@ export const UserType = builder.objectRef<{
   email: string;
   role: string;
   emailVerifiedAt: Date | null;
+
+  avatarUrl: string | null;
+  onboardingCompleted: boolean;
 }>("User");
 
 UserType.implement({
@@ -18,10 +21,25 @@ UserType.implement({
 
     role: t.exposeString("role"),
 
-    emailVerifiedAt: t.expose("emailVerifiedAt", {
-      type: "DateTime",
-      nullable: true,
-    }),
+    avatarUrl: t.exposeString(
+      "avatarUrl",
+      {
+        nullable: true,
+      }
+    ),
+
+    onboardingCompleted:
+      t.exposeBoolean(
+        "onboardingCompleted"
+      ),
+
+    emailVerifiedAt: t.expose(
+      "emailVerifiedAt",
+      {
+        type: "DateTime",
+        nullable: true,
+      }
+    ),
   }),
 });
 
@@ -30,7 +48,11 @@ builder.queryField("me", (t) =>
     type: UserType,
     nullable: true,
 
-    resolve: async (_, __, ctx) => {
+    resolve: async (
+      _,
+      __,
+      ctx
+    ) => {
       if (!ctx.userId) {
         return null;
       }

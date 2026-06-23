@@ -12,6 +12,9 @@ export const AuthPayloadType =
       email: string;
       role: string;
       emailVerifiedAt: Date | null;
+
+      avatarUrl: string | null;
+      onboardingCompleted: boolean;
     };
   }>("AuthPayload");
 
