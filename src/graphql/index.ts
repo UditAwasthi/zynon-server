@@ -1,5 +1,6 @@
 import "./schema/user";
 import "./schema/auth";
+import "./schema/profile";
 
 import { builder } from "./schema/builder";
 

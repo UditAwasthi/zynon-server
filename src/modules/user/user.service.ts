@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { supabase } from "../../lib/supabase";
 import { env } from "../../config/env";
-
+import { prisma } from "../../config/prisma";
 import type {
     CreateAvatarUploadUrlResponse,
 } from "./user.types";
@@ -66,6 +66,86 @@ export class UserService {
             fileUrl:
                 publicUrlData.publicUrl,
         };
+    }
+
+    //Onboarding yahan karunga
+    async completeOnboarding(
+        userId: string,
+        input: {
+            fullName?: string;
+            location?: string;
+            dateOfBirth?: Date;
+
+            pronouns?:
+            | "HE_HIM"
+            | "SHE_HER"
+            | "THEY_THEM"
+            | "OTHER";
+
+            accountType?:
+            | "PERSONAL"
+            | "CREATOR"
+            | "BUSINESS";
+
+            niche?:
+            | "TECHNOLOGY"
+            | "GAMING"
+            | "FITNESS"
+            | "ART"
+            | "MUSIC"
+            | "EDUCATION"
+            | "BUSINESS"
+            | "OTHER";
+
+            showInGlobalSearch?: boolean;
+        }
+    ) {
+        return prisma.$transaction(
+            async (tx) => {
+                const profile =
+                    await tx.profile.update({
+                        where: {
+                            userId,
+                        },
+
+                        data: {
+                            fullName:
+                                input.fullName,
+
+                            location:
+                                input.location,
+
+                            dateOfBirth:
+                                input.dateOfBirth,
+
+                            pronouns:
+                                input.pronouns,
+
+                            accountType:
+                                input.accountType,
+
+                            niche:
+                                input.niche,
+
+                            showInGlobalSearch:
+                                input.showInGlobalSearch,
+                        },
+                    });
+
+                await tx.user.update({
+                    where: {
+                        id: userId,
+                    },
+
+                    data: {
+                        onboardingCompleted:
+                            true,
+                    },
+                });
+
+                return profile;
+            }
+        );
     }
 }
 
