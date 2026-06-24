@@ -14,6 +14,7 @@ export const AuthPayloadType =
       emailVerifiedAt: Date | null;
 
       avatarUrl: string | null;
+      avatarKey: string | null;
       onboardingCompleted: boolean;
     };
   }>("AuthPayload");
@@ -290,3 +291,4 @@ builder.mutationField(
         ),
     })
 );
+

@@ -147,6 +147,24 @@ export class UserService {
             }
         );
     }
+
+    //PROFILE PICTURE UPDATE YAHAN KARUNGA
+    async updateAvatar(
+  userId: string,
+  avatarUrl: string,
+  avatarKey: string
+) {
+  return prisma.user.update({
+    where: {
+      id: userId,
+    },
+
+    data: {
+      avatarUrl,
+      avatarKey,
+    },
+  });
+}
 }
 
 

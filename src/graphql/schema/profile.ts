@@ -6,7 +6,7 @@ import {
 } from "@prisma/client";
 import { userService }
     from "../../modules/user/user.service";
-
+import { UserType } from "./user";
 export const PronounsEnum =
     builder.enumType(
         Pronouns,
@@ -48,6 +48,34 @@ export const ProfileType = builder.objectRef<{
     updatedAt: Date;
 }>("Profile");
 
+const CreateAvatarUploadUrlType =
+    builder.objectRef<{
+        uploadToken: string;
+        path: string;
+        fileUrl: string;
+    }>(
+        "CreateAvatarUploadUrlResponse"
+    );
+
+
+
+CreateAvatarUploadUrlType.implement({
+    fields: (t) => ({
+        uploadToken:
+            t.exposeString(
+                "uploadToken"
+            ),
+
+        path: t.exposeString(
+            "path"
+        ),
+
+        fileUrl:
+            t.exposeString(
+                "fileUrl"
+            ),
+    }),
+});
 
 ProfileType.implement({
     fields: (t) => ({
@@ -136,7 +164,38 @@ ProfileType.implement({
     }),
 });
 
+builder.mutationField(
+    "createAvatarUploadUrl",
+    (t) =>
+        t.field({
+            type:
+                CreateAvatarUploadUrlType,
 
+            args: {
+                contentType:
+                    t.arg.string({
+                        required: true,
+                    }),
+            },
+
+            resolve: async (
+                _,
+                args,
+                ctx
+            ) => {
+                if (!ctx.userId) {
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
+                return userService.createAvatarUploadUrl(
+                    ctx.userId,
+                    args.contentType
+                );
+            },
+        })
+);
 builder.queryField(
     "myProfile",
     (t) =>
@@ -163,7 +222,7 @@ builder.queryField(
             },
         })
 );
-
+// Complete onboarding mutation
 builder.mutationField(
     "completeOnboarding",
     (t) =>
@@ -241,3 +300,41 @@ builder.mutationField(
             },
         })
 );
+
+// Update avatar mutation
+builder.mutationField(
+    "updateAvatar",
+    (t) =>
+        t.field({
+            type: UserType,
+
+            args: {
+                avatarUrl: t.arg.string({
+                    required: true,
+                }),
+
+                avatarKey: t.arg.string({
+                    required: true,
+                }),
+            },
+
+            resolve: async (
+                _,
+                args,
+                ctx
+            ) => {
+                if (!ctx.userId) {
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
+                return userService.updateAvatar(
+                    ctx.userId,
+                    args.avatarUrl,
+                    args.avatarKey
+                );
+            },
+        })
+);
+

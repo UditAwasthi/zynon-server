@@ -8,6 +8,7 @@ export const UserType = builder.objectRef<{
   emailVerifiedAt: Date | null;
 
   avatarUrl: string | null;
+  avatarKey: string | null;
   onboardingCompleted: boolean;
 }>("User");
 
@@ -23,6 +24,12 @@ UserType.implement({
 
     avatarUrl: t.exposeString(
       "avatarUrl",
+      {
+        nullable: true,
+      }
+    ),
+    avatarKey: t.exposeString(
+      "avatarKey",
       {
         nullable: true,
       }
