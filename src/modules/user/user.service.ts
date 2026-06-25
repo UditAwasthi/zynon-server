@@ -150,21 +150,118 @@ export class UserService {
 
     //PROFILE PICTURE UPDATE YAHAN KARUNGA
     async updateAvatar(
-  userId: string,
-  avatarUrl: string,
-  avatarKey: string
-) {
-  return prisma.user.update({
-    where: {
-      id: userId,
-    },
+        userId: string,
+        avatarUrl: string,
+        avatarKey: string
+    ) {
+        return prisma.user.update({
+            where: {
+                id: userId,
+            },
 
-    data: {
-      avatarUrl,
-      avatarKey,
-    },
-  });
-}
+            data: {
+                avatarUrl,
+                avatarKey,
+            },
+        });
+    }
+    //Profile update yahan karunga
+    async updateProfile(
+        userId: string,
+        input: {
+            fullName?: string;
+            bio?: string;
+            location?: string;
+            dateOfBirth?: Date;
+            pronouns?: "HE_HIM" | "SHE_HER" | "THEY_THEM" | "OTHER";
+            accountType?: "PERSONAL" | "CREATOR" | "BUSINESS";
+            niche?:
+            | "TECHNOLOGY"
+            | "GAMING"
+            | "FITNESS"
+            | "ART"
+            | "MUSIC"
+            | "EDUCATION"
+            | "BUSINESS"
+            | "OTHER";
+            profileMusicUrl?: string;
+            showInGlobalSearch?: boolean;
+        }
+    ) {
+        return prisma.$transaction(async (tx) => {
+            if (input.bio !== undefined) {
+                await tx.user.update({
+                    where: { id: userId },
+                    data: {
+                        bio: input.bio,
+                    },
+                });
+            }
+
+            return tx.profile.update({
+                where: {
+                    userId,
+                },
+
+                data: {
+                    ...(input.fullName !== undefined && {
+                        fullName: input.fullName,
+                    }),
+
+                    ...(input.location !== undefined && {
+                        location: input.location,
+                    }),
+
+                    ...(input.dateOfBirth !== undefined && {
+                        dateOfBirth: input.dateOfBirth,
+                    }),
+
+                    ...(input.pronouns !== undefined && {
+                        pronouns: input.pronouns,
+                    }),
+
+                    ...(input.accountType !== undefined && {
+                        accountType: input.accountType,
+                    }),
+
+                    ...(input.niche !== undefined && {
+                        niche: input.niche,
+                    }),
+
+                    ...(input.profileMusicUrl !== undefined && {
+                        profileMusicUrl: input.profileMusicUrl,
+                    }),
+
+                    ...(input.showInGlobalSearch !== undefined && {
+                        showInGlobalSearch:
+                            input.showInGlobalSearch,
+                    }),
+                },
+            });
+        });
+    }
+    //Profile expose yahan karunga
+    async getProfile(username: string) {
+        const usernameLower = username.toLowerCase();
+
+        const user = await prisma.user.findUnique({
+            where: {
+                usernameLower,
+            },
+            include: {
+                profile: true,
+            },
+        });
+
+        if (!user || !user.profile) {
+            throw new Error("Profile not found");
+        }
+
+        return {
+            user,
+            profile: user.profile,
+        };
+    }
 }
 
 

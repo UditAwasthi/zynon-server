@@ -7,6 +7,11 @@ import {
 import { userService }
     from "../../modules/user/user.service";
 import { UserType } from "./user";
+
+import { Prisma } from "@prisma/client";
+
+
+
 export const PronounsEnum =
     builder.enumType(
         Pronouns,
@@ -30,23 +35,6 @@ export const NicheEnum =
             name: "Niche",
         }
     );
-export const ProfileType = builder.objectRef<{
-    id: string;
-    userId: string;
-    fullName: string | null;
-    dateOfBirth: Date | null;
-    pronouns: string | null;
-    location: string | null;
-    accountType: string;
-    niche: string | null;
-    profileMusicUrl: string | null;
-    showInGlobalSearch: boolean;
-    postCount: number;
-    followerCount: number;
-    followingCount: number;
-    createdAt: Date;
-    updatedAt: Date;
-}>("Profile");
 
 const CreateAvatarUploadUrlType =
     builder.objectRef<{
@@ -76,6 +64,24 @@ CreateAvatarUploadUrlType.implement({
             ),
     }),
 });
+export const ProfileType = builder.objectRef<{
+    id: string;
+    userId: string;
+    fullName: string | null;
+    dateOfBirth: Date | null;
+    pronouns: string | null;
+    location: string | null;
+    accountType: string;
+    niche: string | null;
+    profileMusicUrl: string | null;
+    showInGlobalSearch: boolean;
+    postCount: number;
+    followerCount: number;
+    followingCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+}>("Profile");
+
 
 ProfileType.implement({
     fields: (t) => ({
@@ -163,6 +169,7 @@ ProfileType.implement({
         ),
     }),
 });
+
 
 builder.mutationField(
     "createAvatarUploadUrl",
@@ -338,3 +345,173 @@ builder.mutationField(
         })
 );
 
+// Update profile mutation
+builder.mutationField(
+    "updateProfile",
+    (t) =>
+        t.field({
+            type: ProfileType,
+
+            args: {
+                fullName: t.arg.string(),
+
+                bio: t.arg.string(),
+
+                location: t.arg.string(),
+
+                dateOfBirth: t.arg({
+                    type: "DateTime",
+                }),
+
+                pronouns: t.arg({
+                    type: PronounsEnum,
+                }),
+
+                accountType: t.arg({
+                    type: AccountTypeEnum,
+                }),
+
+                niche: t.arg({
+                    type: NicheEnum,
+                }),
+
+                profileMusicUrl: t.arg.string(),
+
+                showInGlobalSearch:
+                    t.arg.boolean(),
+            },
+
+            resolve: async (
+                _,
+                args,
+                ctx
+            ) => {
+                if (!ctx.userId) {
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
+                return userService.updateProfile(
+                    ctx.userId,
+                    {
+                        fullName:
+                            args.fullName ??
+                            undefined,
+
+                        bio:
+                            args.bio ??
+                            undefined,
+
+                        location:
+                            args.location ??
+                            undefined,
+
+                        dateOfBirth:
+                            args.dateOfBirth ??
+                            undefined,
+
+                        pronouns:
+                            args.pronouns ??
+                            undefined,
+
+                        accountType:
+                            args.accountType ??
+                            undefined,
+
+                        niche:
+                            args.niche ??
+                            undefined,
+
+                        profileMusicUrl:
+                            args.profileMusicUrl ??
+                            undefined,
+
+                        showInGlobalSearch:
+                            args.showInGlobalSearch ??
+                            undefined,
+                    }
+                );
+            },
+        })
+);
+
+
+//profile query
+
+
+// Public user type
+
+export const PublicUserType = builder.objectRef<{
+  id: string;
+  username: string;
+  bio: string | null;
+  avatarUrl: string | null;
+}>("PublicUser");
+
+PublicUserType.implement({
+  fields: (t) => ({
+    id: t.exposeID("id"),
+
+    username: t.exposeString("username"),
+
+    bio: t.exposeString("bio", {
+      nullable: true,
+    }),
+
+    avatarUrl: t.exposeString("avatarUrl", {
+      nullable: true,
+    }),
+  }),
+});
+
+// Public profile payload
+
+type PublicProfilePayload = Prisma.UserGetPayload<{
+  include: {
+    profile: true;
+  };
+}>;
+
+export const PublicProfileType = builder.objectRef<{
+  user: PublicProfilePayload;
+  profile: NonNullable<PublicProfilePayload["profile"]>;
+}>("PublicProfile");
+
+PublicProfileType.implement({
+  fields: (t) => ({
+    user: t.field({
+      type: PublicUserType,
+      resolve: (parent) => parent.user,
+    }),
+
+    profile: t.field({
+      type: ProfileType,
+      resolve: (parent) => parent.profile,
+    }),
+  }),
+});
+
+// Public profile query
+
+builder.queryField(
+  "profile",
+  (t) =>
+    t.field({
+      type: PublicProfileType,
+
+      nullable: true,
+
+      args: {
+        username: t.arg.string({
+          required: true,
+        }),
+      },
+
+      resolve: async (_, args) => {
+        return userService.getProfile(
+          args.username
+        );
+      },
+    })
+);

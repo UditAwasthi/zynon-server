@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import { builder } from "./builder";
+import { ProfileType } from "./profile";
 
 export const UserType = builder.objectRef<{
   id: string;
@@ -6,7 +8,7 @@ export const UserType = builder.objectRef<{
   email: string;
   role: string;
   emailVerifiedAt: Date | null;
-
+  bio: string | null;
   avatarUrl: string | null;
   avatarKey: string | null;
   onboardingCompleted: boolean;
@@ -22,23 +24,21 @@ UserType.implement({
 
     role: t.exposeString("role"),
 
-    avatarUrl: t.exposeString(
-      "avatarUrl",
-      {
-        nullable: true,
-      }
-    ),
-    avatarKey: t.exposeString(
-      "avatarKey",
-      {
-        nullable: true,
-      }
-    ),
+    bio: t.exposeString("bio", {
+      nullable: true,
+    }),
 
-    onboardingCompleted:
-      t.exposeBoolean(
-        "onboardingCompleted"
-      ),
+    avatarUrl: t.exposeString("avatarUrl", {
+      nullable: true,
+    }),
+
+    avatarKey: t.exposeString("avatarKey", {
+      nullable: true,
+    }),
+
+    onboardingCompleted: t.exposeBoolean(
+      "onboardingCompleted"
+    ),
 
     emailVerifiedAt: t.expose(
       "emailVerifiedAt",
@@ -50,9 +50,39 @@ UserType.implement({
   }),
 });
 
+// ---------- Me Type ----------
+
+type MePayload = Prisma.UserGetPayload<{
+  include: {
+    profile: true;
+  };
+}>;
+
+export const MeType = builder.objectRef<{
+  user: MePayload;
+  profile: NonNullable<MePayload["profile"]>;
+}>("Me");
+
+MeType.implement({
+  fields: (t) => ({
+    user: t.field({
+      type: UserType,
+      resolve: (parent) => parent.user,
+    }),
+
+    profile: t.field({
+      type: ProfileType,
+      resolve: (parent) => parent.profile,
+    }),
+  }),
+});
+
+// ---------- Me Query ----------
+
 builder.queryField("me", (t) =>
   t.field({
-    type: UserType,
+    type: MeType,
+
     nullable: true,
 
     resolve: async (
@@ -64,11 +94,25 @@ builder.queryField("me", (t) =>
         return null;
       }
 
-      return ctx.prisma.user.findUnique({
-        where: {
-          id: ctx.userId,
-        },
-      });
+      const user =
+        await ctx.prisma.user.findUnique({
+          where: {
+            id: ctx.userId,
+          },
+
+          include: {
+            profile: true,
+          },
+        });
+
+      if (!user || !user.profile) {
+        return null;
+      }
+
+      return {
+        user,
+        profile: user.profile,
+      };
     },
   })
 );
