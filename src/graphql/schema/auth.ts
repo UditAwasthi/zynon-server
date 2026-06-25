@@ -13,6 +13,8 @@ export const AuthPayloadType =
       role: string;
       emailVerifiedAt: Date | null;
 
+      bio: string | null;
+
       avatarUrl: string | null;
       avatarKey: string | null;
       onboardingCompleted: boolean;
@@ -80,6 +82,7 @@ builder.mutationField(
       },
     })
 );
+
 builder.mutationField(
   "login",
   (t) =>
@@ -107,6 +110,7 @@ builder.mutationField(
       },
     })
 );
+
 builder.mutationField(
   "refreshToken",
   (t) =>
@@ -126,6 +130,7 @@ builder.mutationField(
         ),
     })
 );
+
 builder.mutationField(
   "logout",
   (t) =>
@@ -165,6 +170,7 @@ builder.mutationField(
       },
     })
 );
+
 builder.mutationField(
   "sendVerificationEmail",
   (t) =>
@@ -174,6 +180,7 @@ builder.mutationField(
           required: false,
         }),
       },
+
       resolve: async (
         _,
         args,
@@ -192,6 +199,7 @@ builder.mutationField(
       },
     })
 );
+
 builder.mutationField(
   "verifyEmail",
   (t) =>
@@ -220,6 +228,7 @@ builder.mutationField(
       },
     })
 );
+
 builder.mutationField(
   "forgotPassword",
   (t) =>
@@ -239,6 +248,7 @@ builder.mutationField(
         ),
     })
 );
+
 builder.mutationField(
   "resetPassword",
   (t) =>
@@ -291,4 +301,3 @@ builder.mutationField(
         ),
     })
 );
-
